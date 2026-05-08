@@ -19,10 +19,9 @@ Features:
 ### Manual Git Install
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/YOUR_USERNAME/comfyui-grok-describe.git
+git clone https://github.com/ixalondarkstone/comfyui-grok-describe.git
 cd comfyui-grok-describe
 pip install -r requirements.txt
-Install
 ```
 
 Restart ComfyUI.
