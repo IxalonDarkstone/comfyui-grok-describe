@@ -22,3 +22,19 @@ cd ComfyUI/custom_nodes
 git clone https://github.com/YOUR_USERNAME/comfyui-grok-describe.git
 cd comfyui-grok-describe
 pip install -r requirements.txt
+
+Restart ComfyUI.
+Getting API Key
+1.  Go to https://console.x.ai/
+2.  Create / copy your API key (starts with xai-)
+How to Use
+1.  Add 🔑 Grok API Key node → paste your key (recommended)
+2.  Add 🔥 Grok Image Describer node
+3.  Connect:
+	•  Image input
+	•  Optional: grok_api_key from the key node
+4.  Write your instructions (default is optimized for I2V)
+5.  (Recommended) Add a Prompt Verify or Pause Workflow node after it so you can edit the prompt before sending to Wan / I2V.
+Nodes
+•  🔑 Grok API Key – Store key once, reuse across workflows
+•  🔥 Grok Image Describer – Main vision + prompt generation node
