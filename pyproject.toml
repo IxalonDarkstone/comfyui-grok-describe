@@ -1,0 +1,20 @@
+[project]
+name = "comfyui-grok-describe"
+description = "Grok API image describer node for ComfyUI - generates rich prompts for I2V engines like Wan"
+version = "1.0.0"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/YOURUSERNAME/comfyui-grok-describe"
+
+[tool.comfy]
+# This tells ComfyUI Manager / registry how to handle the node
+publisher = "YOUR GITHUB USERNAME"
+display_name = "Grok Image Describer"
+icon = "🔥"
+category = "API / LLM"
+tags = ["grok", "vision", "i2v", "prompt"]
