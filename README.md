@@ -22,6 +22,8 @@ cd ComfyUI/custom_nodes
 git clone https://github.com/YOUR_USERNAME/comfyui-grok-describe.git
 cd comfyui-grok-describe
 pip install -r requirements.txt
+Install
+```
 
 Restart ComfyUI.
 Getting API Key
