@@ -8,7 +8,7 @@ A custom node that uses the Grok API (xAI) to describe input images based on fre
 2. Manual:
    ```bash
    cd ComfyUI/custom_nodes
-   git clone https://github.com/YOURUSERNAME/comfyui-grok-describe.git
+   git clone https://github.com/IxalonDarkstone/comfyui-grok-describe.git
    cd comfyui-grok-describe
    pip install -r requirements.txt
 
