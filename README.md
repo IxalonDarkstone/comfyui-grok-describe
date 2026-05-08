@@ -45,4 +45,5 @@ Restart ComfyUI.
 ### Nodes
 
 •  🔑 Grok API Key – Store key once, reuse across workflows
+
 •  🔥 Grok Image Describer – Main vision + prompt generation node
