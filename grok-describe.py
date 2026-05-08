@@ -29,9 +29,17 @@ class GrokImageDescriber:
     FUNCTION = "describe_image"
     CATEGORY = "Grok/xAI"
 
+    import os
+    from openai import OpenAI
+
     def describe_image(self, image, instructions, api_key, model, max_tokens=1200, temperature=0.7):
-        if not api_key.strip():
-            raise ValueError("❌ Grok API key is required!")
+    # Priority: Node input > Environment variable
+        final_key = api_key.strip() if api_key else os.getenv("GROK_API_KEY", "").strip()
+    
+        if not final_key:
+            raise ValueError("❌ Grok API key is required! set GROK_API_KEY environment variable.")
+
+    # ... rest of your code unchanged ...
 
         # Convert ComfyUI IMAGE tensor → base64 JPEG
         if len(image.shape) == 4:
