@@ -27,12 +27,13 @@ Install
 
 Restart ComfyUI.
 
-##Getting API Key
+### Getting API Key
 
 1.  Go to https://console.x.ai/
 2.  Create / copy your API key (starts with xai-)
 
-##How to Use
+### How to Use
+
 1.  Add 🔑 Grok API Key node → paste your key (recommended)
 2.  Add 🔥 Grok Image Describer node
 3.  Connect:
@@ -41,6 +42,7 @@ Restart ComfyUI.
 4.  Write your instructions (default is optimized for I2V)
 5.  (Recommended) Add a Prompt Verify or Pause Workflow node after it so you can edit the prompt before sending to Wan / I2V.
 
-##Nodes
+### Nodes
+
 •  🔑 Grok API Key – Store key once, reuse across workflows
 •  🔥 Grok Image Describer – Main vision + prompt generation node
