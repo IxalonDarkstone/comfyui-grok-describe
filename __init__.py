@@ -1,4 +1,4 @@
-# __init__.py  (Single-file version - Grok I2V + Grok Text2Img Enhancer)
+# __init__.py
 import torch
 import numpy as np
 from PIL import Image
@@ -50,11 +50,11 @@ class GrokImageDescriber:
                 "image": ("IMAGE",),
                 "image_description_instructions": ("STRING", {
                     "multiline": True,
-                    "default": "Describe the image with extreme cinematic detail. Focus on subject appearance, clothing, facial expression, lighting, colors, composition, background elements, and overall mood.",
+                    "default": "Describe the image with extreme cinematic detail...",
                 }),
                 "action_instructions": ("STRING", {
                     "multiline": True,
-                    "default": "Tell the model exactly what should happen in this image for video generation.\n\nFocus on main subject movement, camera motion, timing, secondary motion, etc.",
+                    "default": "Tell the model exactly what should happen...",
                 }),
                 "model": (["grok-4.3", "grok-2-vision-latest", "grok-2-vision-1212"], {"default": "grok-4.3"}),
                 "use_cache": ("BOOLEAN", {"default": True, "label": "✅ Use Cache"}),
@@ -102,16 +102,60 @@ class GrokImageDescriber:
             print(f"✅ Grok I2V: Cache hit! ({len(cached)} chars)")
             return (image, cached)
 
-        # (rest of the original image processing + Grok call stays the same - omitted for brevity but identical to previous version)
-        # ... [full image-to-base64 + API call code from previous version] ...
+        print("🔄 Grok Image Describer: Calling Grok API...")
 
-        print(f"✅ Grok Image Describer: Generated {len(generated_prompt)} character prompt")
+        # Image to base64
+        if len(image.shape) == 4:
+            img_tensor = image[0]
+        else:
+            img_tensor = image
+
+        np_img = (img_tensor.cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
+        pil_img = Image.fromarray(np_img)
+
+        if pil_img.mode in ("RGBA", "LA") or (pil_img.mode == "P" and "transparency" in pil_img.info):
+            pil_img = pil_img.convert("RGB")
+
+        buffered = io.BytesIO()
+        pil_img.save(buffered, format="JPEG", quality=92)
+        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        image_data_url = f"data:image/jpeg;base64,{img_base64}"
+
+        full_prompt = f"""You are an expert prompt engineer for image-to-video models.
+
+IMAGE DESCRIPTION GUIDELINES:
+{image_description_instructions}
+
+DESIRED MOTION / ACTION:
+{action_instructions}
+
+Combine both into one highly detailed, cohesive, and cinematic prompt."""
+
+        client = OpenAI(api_key=final_key, base_url="https://api.x.ai/v1")
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": full_prompt},
+                    {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}}
+                ]
+            }],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+        generated_prompt = response.choices[0].message.content.strip()
+
         if use_cache:
             self._cache[input_hash] = generated_prompt
+
+        print(f"✅ Grok Image Describer: Generated {len(generated_prompt)} character prompt")
         return (image, generated_prompt)
 
 
-# ====================== NEW: GROK PROMPT ENHANCER (Text2Img) ======================
+# ====================== GROK PROMPT ENHANCER (Text2Img) ======================
 class GrokPromptEnhancer:
     _cache = {}
 
@@ -119,15 +163,8 @@ class GrokPromptEnhancer:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "base_prompt": ("STRING", {
-                    "multiline": True,
-                    "default": "A beautiful girl standing in a forest",
-                }),
-                "enhancement_instructions": ("STRING", {
-                    "multiline": True,
-                    "default": "You are a master prompt engineer. Turn the base prompt into an extremely detailed, cinematic, highly descriptive prompt optimized for text-to-image models. "
-                               "Add lighting, mood, composition, camera angle, quality enhancers, art style references, and visual richness while keeping the original intent.",
-                }),
+                "base_prompt": ("STRING", {"multiline": True, "default": "A beautiful girl standing in a forest"}),
+                "enhancement_instructions": ("STRING", {"multiline": True, "default": "You are a master prompt engineer..."}),
                 "model": (["grok-4.3", "grok-2-vision-latest", "grok-2-vision-1212"], {"default": "grok-4.3"}),
                 "use_cache": ("BOOLEAN", {"default": True, "label": "✅ Use Cache"}),
                 "clear_cache": ("BOOLEAN", {"default": False, "label": "🗑️ Clear Cache"}),
@@ -193,7 +230,7 @@ Base prompt to enhance:
         return (enhanced_prompt,)
 
 
-# ====================== NODE REGISTRATION ======================
+# Register
 NODE_CLASS_MAPPINGS = {
     "GrokImageDescriber": GrokImageDescriber,
     "GrokPromptEnhancer": GrokPromptEnhancer,
@@ -201,9 +238,9 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "GrokImageDescriber": "🔥 Grok Image Describer (I2V Dual)",
-    "GrokPromptEnhancer": "🔥 Grok Prompt Enhancer (Text2Img)",
+    "GrokImageDescriber": "🔥 Grok Image Describer (I2V)",
+    "GrokPromptEnhancer": "🔥 Grok Prompt Enhancer (T2I)",
     "GrokAPIKey": "🔑 Grok API Key",
 }
 
-print("🔥 Grok Prompts: Loaded successfully (I2V + Text2Img Enhancer)")
+print("🔥 Grok Prompts: Loaded successfully (Fixed)")
