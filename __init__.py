@@ -9,8 +9,38 @@ import hashlib
 from openai import OpenAI
 
 
-# ====================== GROK API KEY (File Selector) ======================
+# ====================== LEGACY GROK API KEY (for old workflows) ======================
 class GrokAPIKey:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "api_key": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "placeholder": "xai-your-key-here",
+                    "password": True,
+                }),
+            },
+            "optional": {
+                "save_to_env": ("BOOLEAN", {"default": False}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("api_key",)
+    FUNCTION = "get_key"
+    CATEGORY = "Grok/xAI"
+
+    def get_key(self, api_key, save_to_env=False):
+        key = api_key.strip()
+        if save_to_env and key:
+            os.environ["GROK_API_KEY"] = key
+        return (key,)
+
+
+# ====================== NEW GROK API KEY (File Selector) ======================
+class GrokAPIKeyFile:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -25,7 +55,7 @@ class GrokAPIKey:
                 "manual_key": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "placeholder": "Manual key override (optional)",
+                    "placeholder": "Manual override (optional)",
                     "password": True,
                 }),
             }
@@ -38,7 +68,7 @@ class GrokAPIKey:
 
     def get_key(self, api_key_file, manual_key=""):
         if manual_key.strip():
-            print("✅ Grok: Using manual API key")
+            print("✅ Grok: Using manual key")
             return (manual_key.strip(),)
 
         if os.path.exists(api_key_file):
@@ -46,14 +76,12 @@ class GrokAPIKey:
                 with open(api_key_file, "r", encoding="utf-8") as f:
                     key = f.read().strip()
                 if key.startswith("xai-"):
-                    print(f"✅ Grok API key loaded from: {api_key_file}")
+                    print(f"✅ Grok key loaded from: {api_key_file}")
                     return (key,)
-                else:
-                    raise ValueError("Invalid key in file")
             except Exception as e:
-                raise ValueError(f"Failed to read key file: {e}")
-        else:
-            raise ValueError(f"API key file not found: {api_key_file}\nCreate grok_api_key.txt in ComfyUI folder")
+                raise ValueError(f"Failed to read file: {e}")
+
+        raise ValueError(f"API key file not found: {api_key_file}\nCreate grok_api_key.txt")
 
 
 # ====================== GROK IMAGE DESCRIBER (I2V) ======================
@@ -80,7 +108,7 @@ class GrokImageDescriber:
             "optional": {
                 "grok_api_key": ("STRING", {"forceInput": True}),
                 "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096, "step": 64}),
-                "temperature": ("FLOAT", {"default": 0.75, "min": 0.0, "max": 1.0, "step": 0.05}),
+                "temperature": ("FLOAT", {"default": 0.75}),
             }
         }
 
@@ -178,13 +206,13 @@ class GrokPromptEnhancer:
                 "base_prompt": ("STRING", {"multiline": True, "default": "A beautiful girl in a forest"}),
                 "enhancement_instructions": ("STRING", {"multiline": True, "default": "Expand this into a highly detailed prompt..."}),
                 "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
-                "use_cache": ("BOOLEAN", {"default": True, "label": "Use Cache"}),
-                "clear_cache": ("BOOLEAN", {"default": False, "label": "Clear Cache"}),
+                "use_cache": ("BOOLEAN", {"default": True}),
+                "clear_cache": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "grok_api_key": ("STRING", {"forceInput": True}),
                 "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096, "step": 64}),
-                "temperature": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05}),
+                "temperature": ("FLOAT", {"default": 0.8}),
             }
         }
 
@@ -203,17 +231,16 @@ class GrokPromptEnhancer:
 
         if clear_cache:
             self._cache.clear()
-            print("🗑️ Grok T2I cache cleared")
 
         final_key = grok_api_key or os.getenv("GROK_API_KEY", "").strip()
         if not final_key:
-            raise ValueError("❌ Grok API key required! Use GrokAPIKey node.")
+            raise ValueError("❌ Grok API key required!")
 
         max_tokens = max(256, min(4096, int(max_tokens)))
         input_hash = self._get_input_hash(base_prompt, enhancement_instructions, model, max_tokens)
 
         if use_cache and input_hash in self._cache:
-            print("✅ Grok Prompt Enhancer: Cache hit")
+            print("✅ Grok T2I: Cache hit")
             return (self._cache[input_hash],)
 
         print("🔄 Grok Prompt Enhancer: Calling API...")
@@ -241,17 +268,19 @@ Base prompt to enhance:
         return (enhanced_prompt,)
 
 
-# ====================== REGISTER NODES ======================
+# ====================== REGISTER ALL NODES ======================
 NODE_CLASS_MAPPINGS = {
-    "GrokAPIKey": GrokAPIKey,
+    "GrokAPIKey": GrokAPIKey,           # Legacy / Original
+    "GrokAPIKeyFile": GrokAPIKeyFile,   # New File-based
     "GrokImageDescriber": GrokImageDescriber,
     "GrokPromptEnhancer": GrokPromptEnhancer,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "GrokAPIKey": "🔑 Grok API Key (File)",
+    "GrokAPIKey": "🔑 Grok API Key",           # Old name
+    "GrokAPIKeyFile": "🔑 Grok API Key (File)", # New name
     "GrokImageDescriber": "🔥 Grok Image Describer (I2V)",
     "GrokPromptEnhancer": "🔥 Grok Prompt Enhancer (T2I)",
 }
 
-print("🔥 Grok Prompts: Loaded successfully (I2V + T2I + File Selector)")
+print("🔥 Grok Prompts: Loaded successfully (Legacy + File Version)")
