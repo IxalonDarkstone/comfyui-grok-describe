@@ -9,7 +9,7 @@ import hashlib
 from openai import OpenAI
 
 
-# ====================== GROK API KEY FROM FILE ======================
+# ====================== GROK API KEY (File Selector) ======================
 class GrokAPIKey:
     @classmethod
     def INPUT_TYPES(s):
@@ -25,7 +25,7 @@ class GrokAPIKey:
                 "manual_key": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "placeholder": "Manual override (optional)",
+                    "placeholder": "Manual key override (optional)",
                     "password": True,
                 }),
             }
@@ -49,11 +49,11 @@ class GrokAPIKey:
                     print(f"✅ Grok API key loaded from: {api_key_file}")
                     return (key,)
                 else:
-                    raise ValueError("File does not contain a valid xAI key")
+                    raise ValueError("Invalid key in file")
             except Exception as e:
-                raise ValueError(f"Error reading API key file: {e}")
+                raise ValueError(f"Failed to read key file: {e}")
         else:
-            raise ValueError(f"API key file not found: {api_key_file}\nPlease create grok_api_key.txt")
+            raise ValueError(f"API key file not found: {api_key_file}\nCreate grok_api_key.txt in ComfyUI folder")
 
 
 # ====================== GROK IMAGE DESCRIBER (I2V) ======================
@@ -67,11 +67,11 @@ class GrokImageDescriber:
                 "image": ("IMAGE",),
                 "image_description_instructions": ("STRING", {
                     "multiline": True,
-                    "default": "Describe this image with extreme cinematic detail..."
+                    "default": "Describe this image with extreme cinematic detail. Focus on subject, clothing, lighting, mood, and composition."
                 }),
                 "action_instructions": ("STRING", {
                     "multiline": True,
-                    "default": "Describe desired motion, camera movement, and actions..."
+                    "default": "Describe desired motion, camera movement, actions, and timing for video generation."
                 }),
                 "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
                 "use_cache": ("BOOLEAN", {"default": True, "label": "Use Cache"}),
@@ -120,7 +120,7 @@ class GrokImageDescriber:
 
         print("🔄 Grok Image Describer: Calling API...")
 
-        # Image → Base64
+        # Image to base64
         if len(image.shape) == 4:
             img_tensor = image[0]
         else:
@@ -141,7 +141,7 @@ IMAGE DESCRIPTION:
 DESIRED MOTION/ACTION:
 {action_instructions}
 
-Combine into one rich, detailed prompt."""
+Combine into one rich, detailed, cinematic prompt."""
 
         client = OpenAI(api_key=final_key, base_url="https://api.x.ai/v1")
 
@@ -167,15 +167,91 @@ Combine into one rich, detailed prompt."""
         return (image, generated_prompt)
 
 
-# Register Nodes
+# ====================== GROK PROMPT ENHANCER (T2I) ======================
+class GrokPromptEnhancer:
+    _cache = {}
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "base_prompt": ("STRING", {"multiline": True, "default": "A beautiful girl in a forest"}),
+                "enhancement_instructions": ("STRING", {"multiline": True, "default": "Expand this into a highly detailed prompt..."}),
+                "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
+                "use_cache": ("BOOLEAN", {"default": True, "label": "Use Cache"}),
+                "clear_cache": ("BOOLEAN", {"default": False, "label": "Clear Cache"}),
+            },
+            "optional": {
+                "grok_api_key": ("STRING", {"forceInput": True}),
+                "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096, "step": 64}),
+                "temperature": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("enhanced_prompt",)
+    FUNCTION = "enhance_prompt"
+    CATEGORY = "Grok/xAI"
+
+    def _get_input_hash(self, base, enhancement, model, max_tokens):
+        combined = str(base).encode() + str(enhancement).encode() + str(model).encode() + str(max_tokens).encode()
+        return hashlib.md5(combined).hexdigest()
+
+    def enhance_prompt(self, base_prompt, enhancement_instructions,
+                       model="grok-4.3", use_cache=True, clear_cache=False,
+                       grok_api_key=None, max_tokens=1200, temperature=0.8):
+
+        if clear_cache:
+            self._cache.clear()
+            print("🗑️ Grok T2I cache cleared")
+
+        final_key = grok_api_key or os.getenv("GROK_API_KEY", "").strip()
+        if not final_key:
+            raise ValueError("❌ Grok API key required! Use GrokAPIKey node.")
+
+        max_tokens = max(256, min(4096, int(max_tokens)))
+        input_hash = self._get_input_hash(base_prompt, enhancement_instructions, model, max_tokens)
+
+        if use_cache and input_hash in self._cache:
+            print("✅ Grok Prompt Enhancer: Cache hit")
+            return (self._cache[input_hash],)
+
+        print("🔄 Grok Prompt Enhancer: Calling API...")
+
+        full_system = f"""{enhancement_instructions}
+
+Base prompt to enhance:
+{base_prompt}"""
+
+        client = OpenAI(api_key=final_key, base_url="https://api.x.ai/v1")
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": full_system}],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+        enhanced_prompt = response.choices[0].message.content.strip()
+
+        if use_cache:
+            self._cache[input_hash] = enhanced_prompt
+
+        print(f"✅ Grok Prompt Enhancer: Generated {len(enhanced_prompt)} chars")
+        return (enhanced_prompt,)
+
+
+# ====================== REGISTER NODES ======================
 NODE_CLASS_MAPPINGS = {
     "GrokAPIKey": GrokAPIKey,
     "GrokImageDescriber": GrokImageDescriber,
+    "GrokPromptEnhancer": GrokPromptEnhancer,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GrokAPIKey": "🔑 Grok API Key (File)",
-    "GrokImageDescriber": "🔥 Grok Image Describer",
+    "GrokImageDescriber": "🔥 Grok Image Describer (I2V)",
+    "GrokPromptEnhancer": "🔥 Grok Prompt Enhancer (T2I)",
 }
 
-print("🔥 Grok Prompts: Loaded successfully (Latest Version)")
+print("🔥 Grok Prompts: Loaded successfully (I2V + T2I + File Selector)")
