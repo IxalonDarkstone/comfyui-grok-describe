@@ -9,79 +9,128 @@ import hashlib
 from openai import OpenAI
 
 
-# ====================== LEGACY GROK API KEY (for old workflows) ======================
-class GrokAPIKey:
+def load_grok_key_from_file(file_path="grok_api_key.txt"):
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                key = f.read().strip()
+            if key.startswith("xai-"):
+                return key
+        except:
+            pass
+    return None
+
+
+# ====================== GROK IMAGE TO PROMPT (I2T) ======================
+class GrokImageToPrompt:
+    _cache = {}
+
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "api_key": ("STRING", {
+                "image": ("IMAGE",),
+                "base_prompt": ("STRING", {
                     "multiline": True,
-                    "default": "",
-                    "placeholder": "xai-your-key-here",
-                    "password": True,
+                    "default": "A beautiful girl",
                 }),
-            },
-            "optional": {
-                "save_to_env": ("BOOLEAN", {"default": False}),
-            }
-        }
-
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("api_key",)
-    FUNCTION = "get_key"
-    CATEGORY = "Grok/xAI"
-
-    def get_key(self, api_key, save_to_env=False):
-        key = api_key.strip()
-        if save_to_env and key:
-            os.environ["GROK_API_KEY"] = key
-        return (key,)
-
-
-# ====================== NEW GROK API KEY (File Selector) ======================
-class GrokAPIKeyFile:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
+                "prompt_guidance": ("STRING", {
+                    "multiline": True,
+                    "default": "Create a highly detailed, cinematic prompt. Focus on appearance, clothing, lighting, mood, and composition.",
+                }),
+                "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
                 "api_key_file": ("STRING", {
                     "default": "grok_api_key.txt",
                     "multiline": False,
                     "placeholder": "grok_api_key.txt or full path",
                 }),
+                "use_cache": ("BOOLEAN", {"default": True}),
+                "clear_cache": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                "manual_key": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "placeholder": "Manual override (optional)",
-                    "password": True,
-                }),
+                "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096}),
+                "temperature": ("FLOAT", {"default": 0.8}),
             }
         }
 
     RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("api_key",)
-    FUNCTION = "get_key"
+    RETURN_NAMES = ("prompt",)
+    FUNCTION = "image_to_prompt"
     CATEGORY = "Grok/xAI"
 
-    def get_key(self, api_key_file, manual_key=""):
-        if manual_key.strip():
-            print("✅ Grok: Using manual key")
-            return (manual_key.strip(),)
+    def _get_input_hash(self, image, base, guidance, model, max_tokens):
+        if len(image.shape) == 4:
+            img_tensor = image[0]
+        else:
+            img_tensor = image
+        small = torch.nn.functional.avg_pool2d(img_tensor.permute(2,0,1).unsqueeze(0), kernel_size=8).squeeze(0)
+        img_bytes = small.numpy().tobytes()
+        combined = img_bytes + str(base).encode() + str(guidance).encode() + str(model).encode() + str(max_tokens).encode()
+        return hashlib.md5(combined).hexdigest()
 
-        if os.path.exists(api_key_file):
-            try:
-                with open(api_key_file, "r", encoding="utf-8") as f:
-                    key = f.read().strip()
-                if key.startswith("xai-"):
-                    print(f"✅ Grok key loaded from: {api_key_file}")
-                    return (key,)
-            except Exception as e:
-                raise ValueError(f"Failed to read file: {e}")
+    def image_to_prompt(self, image, base_prompt, prompt_guidance,
+                        model="grok-4.3", api_key_file="grok_api_key.txt",
+                        use_cache=True, clear_cache=False,
+                        max_tokens=1200, temperature=0.8):
 
-        raise ValueError(f"API key file not found: {api_key_file}\nCreate grok_api_key.txt")
+        if clear_cache:
+            self._cache.clear()
+
+        final_key = load_grok_key_from_file(api_key_file) or os.getenv("GROK_API_KEY", "").strip()
+        if not final_key:
+            raise ValueError("❌ Grok API key required!")
+
+        max_tokens = max(256, min(4096, int(max_tokens)))
+        input_hash = self._get_input_hash(image, base_prompt, prompt_guidance, model, max_tokens)
+
+        if use_cache and input_hash in self._cache:
+            print("✅ Grok I2T: Cache hit")
+            return (self._cache[input_hash],)
+
+        print("🔄 Grok Image to Prompt: Calling API...")
+
+        # Image to base64
+        if len(image.shape) == 4:
+            img_tensor = image[0]
+        else:
+            img_tensor = image
+
+        np_img = (img_tensor.cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
+        pil_img = Image.fromarray(np_img).convert("RGB")
+
+        buffered = io.BytesIO()
+        pil_img.save(buffered, format="JPEG", quality=92)
+        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        full_system = f"""{prompt_guidance}
+
+Base idea:
+{base_prompt}
+
+Analyze the image and enhance the prompt accordingly."""
+
+        client = OpenAI(api_key=final_key, base_url="https://api.x.ai/v1")
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": full_system},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}", "detail": "high"}}
+                ]
+            }],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+        generated_prompt = response.choices[0].message.content.strip()
+
+        if use_cache:
+            self._cache[input_hash] = generated_prompt
+
+        print(f"✅ Grok Image to Prompt: Generated {len(generated_prompt)} chars")
+        return (generated_prompt,)
 
 
 # ====================== GROK IMAGE DESCRIBER (I2V) ======================
@@ -93,21 +142,19 @@ class GrokImageDescriber:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "image_description_instructions": ("STRING", {
-                    "multiline": True,
-                    "default": "Describe this image with extreme cinematic detail. Focus on subject, clothing, lighting, mood, and composition."
-                }),
-                "action_instructions": ("STRING", {
-                    "multiline": True,
-                    "default": "Describe desired motion, camera movement, actions, and timing for video generation."
-                }),
+                "image_description_instructions": ("STRING", {"multiline": True, "default": "Describe this image..."}),
+                "action_instructions": ("STRING", {"multiline": True, "default": "Describe motion..."}),
                 "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
-                "use_cache": ("BOOLEAN", {"default": True, "label": "Use Cache"}),
-                "clear_cache": ("BOOLEAN", {"default": False, "label": "Clear Cache"}),
+                "api_key_file": ("STRING", {
+                    "default": "grok_api_key.txt",
+                    "multiline": False,
+                    "placeholder": "grok_api_key.txt or full path",
+                }),
+                "use_cache": ("BOOLEAN", {"default": True}),
+                "clear_cache": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                "grok_api_key": ("STRING", {"forceInput": True}),
-                "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096, "step": 64}),
+                "max_tokens": ("INT", {"default": 1200}),
                 "temperature": ("FLOAT", {"default": 0.75}),
             }
         }
@@ -128,16 +175,16 @@ class GrokImageDescriber:
         return hashlib.md5(combined).hexdigest()
 
     def describe_image(self, image, image_description_instructions, action_instructions,
-                       model="grok-4.3", use_cache=True, clear_cache=False,
-                       grok_api_key=None, max_tokens=1200, temperature=0.75):
+                       model="grok-4.3", api_key_file="grok_api_key.txt",
+                       use_cache=True, clear_cache=False,
+                       max_tokens=1200, temperature=0.75):
 
         if clear_cache:
             self._cache.clear()
-            print("🗑️ Grok I2V cache cleared")
 
-        final_key = grok_api_key or os.getenv("GROK_API_KEY", "").strip()
+        final_key = load_grok_key_from_file(api_key_file) or os.getenv("GROK_API_KEY", "").strip()
         if not final_key:
-            raise ValueError("❌ Grok API key required! Use GrokAPIKey node.")
+            raise ValueError("❌ Grok API key required!")
 
         max_tokens = max(256, min(4096, int(max_tokens)))
         input_hash = self._get_input_hash(image, image_description_instructions, action_instructions, model, max_tokens)
@@ -206,12 +253,16 @@ class GrokPromptEnhancer:
                 "base_prompt": ("STRING", {"multiline": True, "default": "A beautiful girl in a forest"}),
                 "enhancement_instructions": ("STRING", {"multiline": True, "default": "Expand this into a highly detailed prompt..."}),
                 "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
+                "api_key_file": ("STRING", {
+                    "default": "grok_api_key.txt",
+                    "multiline": False,
+                    "placeholder": "grok_api_key.txt or full path",
+                }),
                 "use_cache": ("BOOLEAN", {"default": True}),
                 "clear_cache": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                "grok_api_key": ("STRING", {"forceInput": True}),
-                "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096, "step": 64}),
+                "max_tokens": ("INT", {"default": 1200}),
                 "temperature": ("FLOAT", {"default": 0.8}),
             }
         }
@@ -226,13 +277,14 @@ class GrokPromptEnhancer:
         return hashlib.md5(combined).hexdigest()
 
     def enhance_prompt(self, base_prompt, enhancement_instructions,
-                       model="grok-4.3", use_cache=True, clear_cache=False,
-                       grok_api_key=None, max_tokens=1200, temperature=0.8):
+                       model="grok-4.3", api_key_file="grok_api_key.txt",
+                       use_cache=True, clear_cache=False,
+                       max_tokens=1200, temperature=0.8):
 
         if clear_cache:
             self._cache.clear()
 
-        final_key = grok_api_key or os.getenv("GROK_API_KEY", "").strip()
+        final_key = load_grok_key_from_file(api_key_file) or os.getenv("GROK_API_KEY", "").strip()
         if not final_key:
             raise ValueError("❌ Grok API key required!")
 
@@ -268,19 +320,17 @@ Base prompt to enhance:
         return (enhanced_prompt,)
 
 
-# ====================== REGISTER ALL NODES ======================
+# ====================== REGISTER NODES ======================
 NODE_CLASS_MAPPINGS = {
-    "GrokAPIKey": GrokAPIKey,           # Legacy / Original
-    "GrokAPIKeyFile": GrokAPIKeyFile,   # New File-based
+    "GrokImageToPrompt": GrokImageToPrompt,
     "GrokImageDescriber": GrokImageDescriber,
     "GrokPromptEnhancer": GrokPromptEnhancer,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "GrokAPIKey": "🔑 Grok API Key",           # Old name
-    "GrokAPIKeyFile": "🔑 Grok API Key (File)", # New name
+    "GrokImageToPrompt": "🔥 Grok Image to Prompt (I2T)",
     "GrokImageDescriber": "🔥 Grok Image Describer (I2V)",
     "GrokPromptEnhancer": "🔥 Grok Prompt Enhancer (T2I)",
 }
 
-print("🔥 Grok Prompts: Loaded successfully (Legacy + File Version)")
+print("🔥 Grok Prompts: Loaded (I2T + I2V + T2I)")
