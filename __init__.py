@@ -38,7 +38,7 @@ class GrokImageToPrompt:
                     "multiline": True,
                     "default": "Create a highly detailed, cinematic prompt. Focus on appearance, clothing, lighting, mood, and composition.",
                 }),
-                "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
+                "model": (["grok-4.5", "grok-4.3"], {"default": "grok-4.5"}),
                 "api_key_file": ("STRING", {
                     "default": "grok_api_key.txt",
                     "multiline": False,
@@ -63,13 +63,13 @@ class GrokImageToPrompt:
             img_tensor = image[0]
         else:
             img_tensor = image
-        small = torch.nn.functional.avg_pool2d(img_tensor.permute(2,0,1).unsqueeze(0), kernel_size=8).squeeze(0)
+        small = torch.nn.functional.avg_pool2d(img_tensor.permute(2, 0, 1).unsqueeze(0), kernel_size=8).squeeze(0)
         img_bytes = small.numpy().tobytes()
         combined = img_bytes + str(base).encode() + str(guidance).encode() + str(model).encode() + str(max_tokens).encode()
         return hashlib.md5(combined).hexdigest()
 
     def image_to_prompt(self, image, base_prompt, prompt_guidance,
-                        model="grok-4.3", api_key_file="grok_api_key.txt",
+                        model="grok-4.5", api_key_file="grok_api_key.txt",
                         use_cache=True, clear_cache=False,
                         max_tokens=1200, temperature=0.8):
 
@@ -89,7 +89,6 @@ class GrokImageToPrompt:
 
         print("🔄 Grok Image to Prompt: Calling API...")
 
-        # Image to base64
         if len(image.shape) == 4:
             img_tensor = image[0]
         else:
@@ -142,9 +141,15 @@ class GrokImageDescriber:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "image_description_instructions": ("STRING", {"multiline": True, "default": "Describe this image..."}),
-                "action_instructions": ("STRING", {"multiline": True, "default": "Describe motion..."}),
-                "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
+                "image_description_instructions": ("STRING", {
+                    "multiline": True,
+                    "default": "Describe this image with extreme cinematic detail..."
+                }),
+                "action_instructions": ("STRING", {
+                    "multiline": True,
+                    "default": "Describe desired motion and camera movement..."
+                }),
+                "model": (["grok-4.5", "grok-4.3"], {"default": "grok-4.5"}),
                 "api_key_file": ("STRING", {
                     "default": "grok_api_key.txt",
                     "multiline": False,
@@ -154,7 +159,7 @@ class GrokImageDescriber:
                 "clear_cache": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                "max_tokens": ("INT", {"default": 1200}),
+                "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096}),
                 "temperature": ("FLOAT", {"default": 0.75}),
             }
         }
@@ -169,13 +174,13 @@ class GrokImageDescriber:
             img_tensor = image[0]
         else:
             img_tensor = image
-        small = torch.nn.functional.avg_pool2d(img_tensor.permute(2,0,1).unsqueeze(0), kernel_size=8).squeeze(0)
+        small = torch.nn.functional.avg_pool2d(img_tensor.permute(2, 0, 1).unsqueeze(0), kernel_size=8).squeeze(0)
         img_bytes = small.numpy().tobytes()
         combined = img_bytes + str(desc).encode() + str(action).encode() + str(model).encode() + str(max_tokens).encode()
         return hashlib.md5(combined).hexdigest()
 
     def describe_image(self, image, image_description_instructions, action_instructions,
-                       model="grok-4.3", api_key_file="grok_api_key.txt",
+                       model="grok-4.5", api_key_file="grok_api_key.txt",
                        use_cache=True, clear_cache=False,
                        max_tokens=1200, temperature=0.75):
 
@@ -195,7 +200,6 @@ class GrokImageDescriber:
 
         print("🔄 Grok Image Describer: Calling API...")
 
-        # Image to base64
         if len(image.shape) == 4:
             img_tensor = image[0]
         else:
@@ -250,9 +254,15 @@ class GrokPromptEnhancer:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "base_prompt": ("STRING", {"multiline": True, "default": "A beautiful girl in a forest"}),
-                "enhancement_instructions": ("STRING", {"multiline": True, "default": "Expand this into a highly detailed prompt..."}),
-                "model": (["grok-4.3", "grok-2-vision-latest"], {"default": "grok-4.3"}),
+                "base_prompt": ("STRING", {
+                    "multiline": True,
+                    "default": "A beautiful girl in a forest"
+                }),
+                "enhancement_instructions": ("STRING", {
+                    "multiline": True,
+                    "default": "Expand this into a highly detailed prompt..."
+                }),
+                "model": (["grok-4.5", "grok-4.3"], {"default": "grok-4.5"}),
                 "api_key_file": ("STRING", {
                     "default": "grok_api_key.txt",
                     "multiline": False,
@@ -262,7 +272,7 @@ class GrokPromptEnhancer:
                 "clear_cache": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                "max_tokens": ("INT", {"default": 1200}),
+                "max_tokens": ("INT", {"default": 1200, "min": 256, "max": 4096}),
                 "temperature": ("FLOAT", {"default": 0.8}),
             }
         }
@@ -277,7 +287,7 @@ class GrokPromptEnhancer:
         return hashlib.md5(combined).hexdigest()
 
     def enhance_prompt(self, base_prompt, enhancement_instructions,
-                       model="grok-4.3", api_key_file="grok_api_key.txt",
+                       model="grok-4.5", api_key_file="grok_api_key.txt",
                        use_cache=True, clear_cache=False,
                        max_tokens=1200, temperature=0.8):
 
@@ -333,4 +343,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GrokPromptEnhancer": "🔥 Grok Prompt Enhancer (T2I)",
 }
 
-print("🔥 Grok Prompts: Loaded (I2T + I2V + T2I)")
+print("🔥 Grok Prompts: Loaded (I2T + I2V + T2I) - grok-4.5")
