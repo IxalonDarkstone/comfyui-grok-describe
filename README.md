@@ -1,51 +1,76 @@
-# ComfyUI Grok Image Describer
+**Updated README.md** for your current Grok Prompts custom node:
 
-**Generate high-quality image descriptions with Grok (xAI) optimized for image-to-video models** (Wan, Hunyuan, LTX, etc.).
+```markdown
+# ComfyUI Grok Prompts
 
-Features:
-- Freeform instructions for tailored prompts
-- Visual Grok API Key node (like other popular API nodes)
-- Supports direct input, connected key node, or `GROK_API_KEY` env var
-- High-detail vision + temperature / max_tokens control
-- Image passthrough for easy workflow chaining
+Custom nodes for ComfyUI that use xAI's Grok API to generate and enhance prompts from images or text.
+
+## Nodes
+
+### 🔥 Grok Image to Prompt (I2T)
+Converts an image into a detailed text prompt.
+- **Inputs**: Image, base prompt, prompt guidance instructions, model, API key file
+- **Output**: Enhanced prompt string
+- Best for creating high-quality prompts from reference images
+
+### 🔥 Grok Image Describer (I2V)
+Generates motion-focused prompts for image-to-video workflows.
+- **Inputs**: Image, image description instructions, action/motion instructions, model, API key file
+- **Output**: Image + video-ready prompt
+- Optimized for Wan and other I2V models
+
+### 🔥 Grok Prompt Enhancer (T2I)
+Expands a short base prompt into a rich, detailed prompt.
+- **Inputs**: Base prompt, enhancement instructions, model, API key file
+- **Output**: Enhanced prompt string
+- Ideal for text-to-image workflows
+
+## Features
+
+- **Secure API key handling** — Load key from `grok_api_key.txt` (or custom path). Never stored in workflows.
+- **Caching** — Skips API calls when inputs haven't changed.
+- **Models**: `grok-4.5` (default) and `grok-4.3`
+- **Controls**: temperature, max_tokens, clear cache
 
 ## Installation
 
-### Via ComfyUI Manager (Recommended)
-1. Open ComfyUI Manager
-2. Search for **"Grok Image Describer"** or **"comfyui-grok-describe"**
-3. Install and restart ComfyUI
+1. Clone into your custom nodes folder:
+   ```bash
+   cd ComfyUI/custom_nodes
+   git clone https://github.com/YOUR_USERNAME/comfyui-grok-describe.git
+   ```
 
-### Manual Git Install
-```bash
-cd ComfyUI/custom_nodes
-git clone https://github.com/ixalondarkstone/comfyui-grok-describe.git
-cd comfyui-grok-describe
-pip install -r requirements.txt
+2. Install dependencies:
+   ```bash
+   pip install openai Pillow numpy
+   ```
+
+3. Create `grok_api_key.txt` in your ComfyUI root folder (or custom path) containing only your xAI API key:
+   ```
+   xai-your-key-here
+   ```
+
+4. Restart ComfyUI. Nodes appear under **Grok/xAI**.
+
+## Usage
+
+- Set `api_key_file` on each node (default: `grok_api_key.txt`).
+- For vision nodes (I2T / I2V), connect an image.
+- Use the guidance/instruction fields to control output style (Danbooru tags, natural language, NSFW, cinematic, etc.).
+- Enable caching for repeated runs with the same inputs.
+
+## Requirements
+
+- ComfyUI
+- xAI API key (get one at [console.x.ai](https://console.x.ai))
+- `openai` Python package
+
+## Notes
+
+- Vision requests cost more tokens than text-only.
+- Clear cache if you change instructions or want a fresh generation.
+- Works with any diffusion model that accepts text prompts (Flux, SDXL, Wan, etc.).
 ```
+2. Push the changes.
 
-Restart ComfyUI.
-
-### Getting API Key
-
-1.  Go to https://console.x.ai/
-2.  Create / copy your API key (starts with xai-)
-
-### How to Use
-
-1.  Add 🔑 Grok API Key node → paste your key (recommended)
-2.  Add 🔥 Grok Image Describer node
-3.  Connect:
-
-	•  Image input
-
-	•  Optional: grok_api_key from the key node
-
-4.  Write your instructions (default is optimized for I2V)
-5.  (Recommended) Add a Prompt Verify or Pause Workflow node after it so you can edit the prompt before sending to Wan / I2V.
-
-### Nodes
-
-•  🔑 Grok API Key – Store key once, reuse across workflows
-
-•  🔥 Grok Image Describer – Main vision + prompt generation node
+Let me know the exact GitHub URL if you want me to adjust anything, or if you need a version that includes screenshots/workflow examples.
