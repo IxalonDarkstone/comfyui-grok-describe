@@ -1,6 +1,3 @@
-**Updated README.md** for your current Grok Prompts custom node:
-
-```markdown
 # ComfyUI Grok Prompts
 
 Custom nodes for ComfyUI that use xAI's Grok API to generate and enhance prompts from images or text.
@@ -70,7 +67,3 @@ Expands a short base prompt into a rich, detailed prompt.
 - Vision requests cost more tokens than text-only.
 - Clear cache if you change instructions or want a fresh generation.
 - Works with any diffusion model that accepts text prompts (Flux, SDXL, Wan, etc.).
-```
-2. Push the changes.
-
-Let me know the exact GitHub URL if you want me to adjust anything, or if you need a version that includes screenshots/workflow examples.
